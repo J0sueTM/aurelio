@@ -2,8 +2,6 @@
 #+author: Josue Teodoro, [[mailto:teodoro.josue@pm.me][Email]]
 #+date: <2024-05-03 Fri>
 
-* Aurelio
-
 Aurelio is a customizable parser for domain specific usecases. Build your own parser in a matter of hours!
 
 #+begin_quote

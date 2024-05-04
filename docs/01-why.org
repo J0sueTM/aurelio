@@ -2,8 +2,6 @@
 #+author: Josue Teodoro, [[mailto:teodoro.josue@pm.me][Email]]
 #+date: <2024-05-04 Sat>
 
-* Why did I create Aurelio?
-
 Aurelio is a parser that you can use to make sense of textual stuff in your project. I'll talk about possible usecases in the future, but that's the primary concern I had when I thought about creating Aurelio. Specifically, I work (or worked, I don't know when you're reading this) at [[https://moclojer.com][Moclojer]], a company behind this [[https://github.com/moclojer/moclojer][open source project]], a REST API mocker.
 
 Moclojer (the FOSS project, not the company) can use yaml, json or openai spec for configuration. That's fine, but we were having problems when trying to lint the file. Since we have a specific usecase, handling syntax error was painful, since most linters we found out there worked fine, but failed to integrate well with schema validation (i.e. verifying if the content matches our defined spec), while also pointing out exactly where the problem happened.
@@ -54,7 +52,7 @@ mock ::= endpoint*
 And this is what it looks in Aurelio syntax:
 
 #+begin_src clojure
-  [;; yaml
+  {;; yaml
    :indent [:+ [:| ["\t" " "]]]
    :seqb [:| [#block "-" #flow "["]]
    :seqe [:| [#block :empty #flow "]"]]
@@ -86,7 +84,7 @@ And this is what it looks in Aurelio syntax:
                      ["response" ":" :response]
                      ["webhook" ":" :webhook]]
               :mape :seqe]
-   :mock [:* :endpoint]]
+   :mock [:* :endpoint]}
 #+end_src
 
 The last one will be the one considered when parsing a given arg.
