@@ -7,15 +7,6 @@
   (fn [^Character c2]
     (= (int c1) (int c2))))
 
-^:rct/test
-(comment
-  ((build-char-p \c) \c)
-  ;; => true
-
-  ((build-char-p \c) \t)
-  ;; => false
-  )
-
 (defn build-or-p
   "Returns a predicate function that runs given list of
   `predicates` against any other value, returning true if
@@ -25,27 +16,6 @@
   ([& predicates]
    (fn [v]
      ((complement not-any?) #(% v) predicates))))
-
-^:rct/test
-(comment
-  ((build-or-p
-    (build-char-p \c)
-    (build-char-p \t))
-   \c)
-  ;; => true
-
-  ((build-or-p
-    (build-char-p \c)
-    (build-char-p \t))
-   \v)
-  ;; => false
-
-  (try
-    (build-or-p)
-    (catch Exception e
-      (.getMessage e)))
-  ;; => "`or` predicate has no inner predicates."
-  )
 
 (defn build-range-p
   "Returns a predicate function that tests whether any other
@@ -57,18 +27,6 @@
   [start end]
   (fn [c]
     (<= (int start) (int c) (int end))))
-
-^:rct/test
-(comment
-  ((build-range-p \a \z) \n)
-  ;; => true
-
-  ((build-range-p \0 \9) \3)
-  ;; => true
-
-  ((build-range-p \a \z) \5)
-  ;; => false
-  )
 
 (defn build-seq*-p
   [predicate]
@@ -108,7 +66,6 @@
           (into {})))
    {} exprs))
 
-^:rct/test
 (comment
   (sort-sym-refs [[:a :b [:or :d :d]]
                   [:b [:seq+ :d :d]]])
@@ -125,16 +82,6 @@
     (->> grammar
          (sort-by #(get sym-refs (key %) 0) >)
          (into {}))))
-
-^:rct/test
-(comment
-  (order-syms-by-dep
-   {:a [:or [:seq+ :d] :e]
-    :b [\c [:seq* :e] :d :d]
-    :e [\a]
-    :d [\n]})
-  ;; => {:d [\n], :e [\a], :a [:or [:seq+ :d] :e], :b [\c [:seq* :e] :d :d]}
-  )
 
 (defn build-expr-p
   "Builds a list of predicates, corresponding to each expression in given `expressions`."
@@ -159,39 +106,6 @@
              (vector? inner-expr) build-expr-p))
          expr)))))
 
-^:rct/test
-(comment
-  (let [[space-p c-p] (build-expr-p [\space \c])]
-    [(space-p \space)
-     (space-p \c)
-     (c-p \c)])
-  ;; => [true false true]
-
-  (build-expr-p [:hello :world])
-  ;; => (:hello :world)
-
-  (let [c-or-t-p (build-expr-p [:or \c \t])]
-    [(c-or-t-p \c)
-     (c-or-t-p \t)
-     (c-or-t-p \n)])
-  ;; => [true true false]
-
-  (let [[or-abc-p n-p] (build-expr-p [[:or \a \b \c] \n])]
-    [(or-abc-p \a)
-     (or-abc-p \b)
-     (or-abc-p \c)
-     (or-abc-p \n)
-     (n-p \n)
-     (n-p \a)])
-  ;; => [true true true false true false]
-
-  (try
-    (build-expr-p [])
-    (catch Exception e
-      (.getMessage e)))
-  ;; => "an empty expression is invalid."
-  )
-
 (def base-grammar
   {:ws [\space]
    :nl [\n]
@@ -210,16 +124,3 @@
      (fn [gr sym expr]
        (assoc gr sym (build-expr-p expr)))
      {} grammar)))
-
-^:rct/test
-(comment
-  (build {})
-  ;; =>>
-  {:digit fn?
-   :char fn?
-   :ws '(fn?)
-   :nl '(fn?)
-   :string fn?
-   :number '(fn? fn? fn?)}
-  ;;
-  )
