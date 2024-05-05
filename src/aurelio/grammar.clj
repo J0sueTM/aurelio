@@ -18,7 +18,8 @@
 
 (defn build-or-p
   "Returns a predicate function that runs given list of
-  `predicates` against any other value."
+  `predicates` against any other value, returning true if
+  any of them returns true as well."
   ([]
    (throw (Exception. "`or` predicate has no inner predicates.")))
   ([& predicates]
@@ -107,6 +108,13 @@
           (into {})))
    {} exprs))
 
+^:rct/test
+(comment
+  (sort-sym-refs [[:a :b [:or :d :d]]
+                  [:b [:seq+ :d :d]]])
+  ;; => {:d 4, :b 2, :a 1}
+  )
+
 (defn order-syms-by-dep
   "Given a `grammar`, reorders its symbols (i.e. `keywords`) based
   on their reference count by other symbol's expressions.
@@ -114,11 +122,11 @@
   See also: `sort-sym-refs`"
   [grammar]
   (let [sym-refs (sort-sym-refs (vals grammar))]
-    (->> (sort-by
-          #(get sym-refs (key %) 0) >
-          grammar)
+    (->> grammar
+         (sort-by #(get sym-refs (key %) 0) >)
          (into {}))))
 
+^:rct/test
 (comment
   (order-syms-by-dep
    {:a [:or [:seq+ :d] :e]
@@ -128,34 +136,90 @@
   ;; => {:d [\n], :e [\a], :a [:or [:seq+ :d] :e], :b [\c [:seq* :e] :d :d]}
   )
 
-;; (defn build-vec
-;;   [id expr]
-;;   (if-let [?keyword (first expr)]
-;;     (if-let [?op-builder (get predicate-builders ?keyword)]
-;;       #(apply (apply ?op-builder (second expr)) %)
-;;       ?keyword)
-;;     (throw (ex-message (str "identifier `" id
-;;                             "` has an empty vector as expression")))))
-;;  
-;; (defn build-identifier
-;;   [id expr grammar]
-;;   (if-let [built-id (get-in grammar id)]
-;;     built-id
-;;     (->> (cond
-;;            (char? expr) (build-char-p expr)
-;;            (vector? expr) (id build-vec expr))
-;;          (assoc grammar id))))
+(defn build-expr-p
+  "Builds a list of predicates, corresponding to each expression in given `expressions`."
+  [expr]
+  (if (empty? expr)
+    (throw (Exception. "an empty expression is invalid."))
+    (let [pred-keyword (first expr)
+          pred-builder (get predicate-builders pred-keyword)]
+      (if (and (keyword? pred-keyword) (some? pred-builder))
+        (try
+          (->> (rest expr)
+               build-expr-p
+               (apply pred-builder))
+          (catch Exception e
+            (throw (Exception. (str "failed to build predicate `" pred-keyword "`\n"
+                                    (.getMessage e))))))
+        (map
+         (fn [inner-expr]
+           (cond-> inner-expr
+             (char? inner-expr) build-char-p
+             (keyword? inner-expr) identity
+             (vector? inner-expr) build-expr-p))
+         expr)))))
+
+^:rct/test
+(comment
+  (let [[space-p c-p] (build-expr-p [\space \c])]
+    [(space-p \space)
+     (space-p \c)
+     (c-p \c)])
+  ;; => [true false true]
+
+  (build-expr-p [:hello :world])
+  ;; => (:hello :world)
+
+  (let [c-or-t-p (build-expr-p [:or \c \t])]
+    [(c-or-t-p \c)
+     (c-or-t-p \t)
+     (c-or-t-p \n)])
+  ;; => [true true false]
+
+  (let [[or-abc-p n-p] (build-expr-p [[:or \a \b \c] \n])]
+    [(or-abc-p \a)
+     (or-abc-p \b)
+     (or-abc-p \c)
+     (or-abc-p \n)
+     (n-p \n)
+     (n-p \a)])
+  ;; => [true true true false true false]
+
+  (try
+    (build-expr-p [])
+    (catch Exception e
+      (.getMessage e)))
+  ;; => "an empty expression is invalid."
+  )
 
 (def base-grammar
   {:ws [\space]
    :nl [\n]
+   :char [:or
+          [:range \a \z]
+          [:range \A \Z]]
+   :string [:seq+ :char]
    :digit [:range \0 \9]
    :number [[:seq+ :digit]
-            [:opt \.]
-            [:opt [:seq+ :digit]]]})
+            [:opt [\. [:seq+ :digit]]]]})
 
 (defn build
   [user-grammar]
   (let [grammar (order-syms-by-dep (merge base-grammar user-grammar))]
-    ;; TODO: implement remaining grammar builders
-    (identity grammar)))
+    (reduce-kv
+     (fn [gr sym expr]
+       (assoc gr sym (build-expr-p expr)))
+     {} grammar)))
+
+^:rct/test
+(comment
+  (build {})
+  ;; =>>
+  {:digit fn?
+   :char fn?
+   :ws '(fn?)
+   :nl '(fn?)
+   :string fn?
+   :number '(fn? fn? fn?)}
+  ;;
+  )
