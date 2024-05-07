@@ -52,39 +52,44 @@ mock ::= endpoint*
 And this is what it looks in Aurelio syntax:
 
 #+begin_src clojure
-  {;; yaml
-   :indent [:+ [:| ["\t" " "]]]
-   :seqb [:| [#block "-" #flow "["]]
-   :seqe [:| [#block :empty #flow "]"]]
-   :mapb [:| [#block :empty #flow "{"]]
-   :mape [:| [#block :empty #flow "}"]]
-   :multiline #block [:| "|" ">"]
- 
-   ;; mock
-   :method [:| ["GET" "HEAD" "POST" "PUT" "DELETE"
-                 "CONNECT" "OPTIONS" "TRACE"]]
-   :path [:+ "/" :string]
-   :header [:string ":" :string]
-   :response [:mapb [:ul
-                     [:? "status" ":" [:... [200 400]]]
-                     [:? "headers" ":" :mapb [:+ header] :mape]
-                     ["body" ":" [:? :multiline] :string]]
-              :mape]
-   :webhook [:mapb [:ul
-                    [:? "sleep-time" ":" :int]
-                    [:? "if" ":" :string]
-                    ["url" ":" :string]
-                    ["method" ":" :method]
-                    ["body" ":" [:? :multiline] :string]]
-             :mape]
-   :endpoint [:seqb "endpoint"
-              :mapb [:ul
-                     [:? "method" ":" :method]
-                     ["path" ":" :path]
-                     ["response" ":" :response]
-                     ["webhook" ":" :webhook]]
-              :mape :seqe]
-   :mock [:* :endpoint]}
+    {;; yaml
+     :indent [:seq+ [:or \tab \space]]
+     :seqb [:or \- \[]
+     :seqe [:or :empty \]]
+     :mapb [:or :empty \{]
+     :mape [:or :empty \}]
+     :quote [:opt [:or \' \"]]
+     :string [:quote :str :quote]
+     :multiline [:or \| \>]
+
+     ;; mock
+     :method [:or "GET" "HEAD" "POST" "PUT" "DELETE" "CONNECT" "OPTIONS" "TRACE"]
+     :path [:seq+ \/ :string]
+     :header [:string \: :string]
+     :response [:mapb
+                [:useq
+                 [:opt "status" \: [:range ["200" "400"]]]
+                 [:opt "headers" \: :mapb [:seq+ :header] :mape]
+                 "body" ":" [:opt :multiline] :string]
+                :mape]
+     :webhook [:mapb
+               [:useq
+                [:opt "sleep-time" \: :int]
+                [:opt "if" \: :string]
+                ["url" \: :string]
+                ["method" \: :method]
+                ["body" \: [:opt :multiline] :string]]
+               :mape]
+     :endpoint [:seqb "endpoint"
+                :mapb
+                [:useq
+                 [:? "method" \: :method]
+                 ["path" \: :path]
+                 ["response" \: :response]
+                 ["webhook" \: :webhook]]
+                :mape
+                :seqe]
+     :mock [:seq* :endpoint]}
 #+end_src
 
 The last one will be the one considered when parsing a given arg.

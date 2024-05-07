@@ -1,21 +1,27 @@
 (ns aurelio.grammar)
 
 (defn build-char-p
-  "Returns a predicate function that can compare given character
+  "Returns a predicate function that compares given character
   `c1` against any other character."
   [^Character c1]
   (fn [^Character c2]
     (= (int c1) (int c2))))
 
+(defn build-str-p
+  "Returns a predicate function that compares given string
+  `s1` agains any other string."
+  [^String s1]
+  (fn [^String s2]
+    (= s1 s2)))
+
 (defn build-or-p
-  "Returns a predicate function that runs given list of
-  `predicates` against any other value, returning true if
-  any of them returns true as well."
+  "Returns a predicate function that tests given list of
+  `predicates` against any expression."
   ([]
    (throw (Exception. "`or` predicate has no inner predicates.")))
   ([& predicates]
-   (fn [v]
-     ((complement not-any?) #(% v) predicates))))
+   (fn [expr]
+     ((complement not-any?) #(% expr) predicates))))
 
 (defn build-range-p
   "Returns a predicate function that tests whether any other
@@ -29,16 +35,52 @@
     (<= (int start) (int c) (int end))))
 
 (defn build-seq*-p
+  "Returns a predicate function that tests given `predicate` against
+  a sequence of expressions that `MAY` be null or empty."
   [predicate]
-  (fn [vals]
-    (every? #(predicate %) vals)))
+  (fn [exprs]
+    (every? #(predicate %) (filter some? (seq exprs)))))
+
+(defn build-seq+-p
+  "Returns a predicate function that tests given `predicate` against
+  a sequence of expressions that `CANNOT` be `nil` or empty."
+  [predicate]
+  (fn [exprs]
+    (and (some? (seq exprs)) ((build-seq*-p predicate) exprs))))
+
+(defn build-opt-p
+  "Returns a predicate function that tests given `predicate` against
+  any expression, as long as it is not `nil`."
+  [predicate]
+  (fn [& expr]
+    (or (empty? expr) (predicate (first expr)))))
+
+;; TODO: improve this, too weak
+(defn build-useq-p
+  "Returns a predicate function that tests if all non-optional expressions
+  match uniquely (independent from order) each given `predicate`."
+  ([]
+   (throw (Exception. "`useq` predicate has no predicates.")))
+  ([& predicates]
+   (fn [exprs]
+     ;; compare non-optionals with predicate count
+     (if (not= (count (remove #(when (seq? %)
+                                 (not= (first %) :opt))
+                              exprs))
+               (count predicates))
+       (throw (Exception. "expression count != predicate count"))
+       (let [preds-or-p (apply build-or-p predicates)]
+         (map #(preds-or-p %) exprs))))))
+
+;; ((build-useq-p (build-char-p \c) (build-char-p \t)) [\t \t])
 
 (def predicate-builders
   {:or build-or-p
    :range build-range-p
    :seq* build-seq*-p
-   :seq+ build-seq*-p
-   :opt build-seq*-p})
+   :seq+ build-seq+-p
+   :opt build-seq*-p
+   :useq build-useq-p})
 
 (defn- sort-sym-refs
   "Given a list of `expressions` (the vals for a grammar table),
@@ -48,7 +90,8 @@
   a reference to a symbol created by the user.
 
   `NOTE`: This algorithm should be refactored in the future. We're currently
-  ignoring circular dependencies. Also, it looks complex :("
+  ignoring circular dependencies. Also, it looks complex :(
+  "
   [exprs]
   (reduce
    (fn [acc expr]
@@ -92,16 +135,17 @@
           pred-builder (get predicate-builders pred-keyword)]
       (if (and (keyword? pred-keyword) (some? pred-builder))
         (try
-          (->> (rest expr)
-               build-expr-p
+          (->> (build-expr-p (rest expr))
                (apply pred-builder))
           (catch Exception e
-            (throw (Exception. (str "failed to build predicate `" pred-keyword "`\n"
+            (throw (Exception. (str "failed to build predicate `"
+                                    pred-keyword "`\n"
                                     (.getMessage e))))))
         (map
          (fn [inner-expr]
            (cond-> inner-expr
              (char? inner-expr) build-char-p
+             (string? inner-expr) build-str-p
              (keyword? inner-expr) identity
              (vector? inner-expr) build-expr-p))
          expr)))))
@@ -109,13 +153,7 @@
 (def base-grammar
   {:ws [\space]
    :nl [\n]
-   :char [:or
-          [:range \a \z]
-          [:range \A \Z]]
-   :string [:seq+ :char]
-   :digit [:range \0 \9]
-   :number [[:seq+ :digit]
-            [:opt [\. [:seq+ :digit]]]]})
+   :empty [""]})
 
 (defn build
   [user-grammar]

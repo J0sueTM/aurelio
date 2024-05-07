@@ -7,6 +7,10 @@
   [(t/is ((g/build-char-p \c) \c))
    (t/is (not ((g/build-char-p \c) \t)))])
 
+(t/deftest build-str-p-test
+  [(t/is ((g/build-str-p "hello") "hello"))
+   (t/is (not ((g/build-str-p "hello") "bye")))])
+
 (t/deftest build-or-p-test
   (let [or-ct-p (g/build-or-p
                  (g/build-char-p \c)
@@ -48,7 +52,7 @@
      :a [:or [:seq+ :d] :e]
      :b [\c [:seq* :e] :d :d]}))
 
-(t/deftest build-expr-p
+(t/deftest build-expr-p-test
   (t/testing "char expr"
     (let [[space-p c-p] (g/build-expr-p [\space \c])]
       [(t/is (space-p \space))
@@ -64,6 +68,27 @@
        (t/is (not (or-p \n)))
        (t/is (n-p \n))
        (t/is (not (n-p \a)))])))
+
+(t/deftest build-seq-p-test
+  (let [alphachar-p (g/build-or-p
+                     (g/build-range-p \a \z)
+                     (g/build-range-p \A \Z))]
+    (t/testing "seq*"
+      (let [alphastr*-p (g/build-seq*-p alphachar-p)]
+        [(t/is (alphastr*-p []))
+         (t/is (alphastr*-p nil))
+         (t/is (alphastr*-p [\h \e \l \l \o]))
+         (t/is (not (alphastr*-p [\h \3 \l \l \o])))]))
+    (t/testing "seq+"
+      (let [alphastr+-p (g/build-seq+-p alphachar-p)]
+        [(t/is (alphastr+-p [\h \e \l \l \o]))
+         (t/is (not (alphastr+-p [\3])))]))))
+
+(t/deftest build-opt-p-test
+  (let [c-p (g/build-opt-p (g/build-char-p \c))]
+    [(t/is (c-p))
+     (t/is (c-p \c))
+     (t/is (not (c-p \t)))]))
 
 ;; TODO
 #_(t/deftest build
